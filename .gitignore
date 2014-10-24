@@ -1,0 +1,4 @@
+#mIRC Script ignores
+users.ini
+vars.ini
+*.bak

@@ -1,0 +1,76 @@
+;; TODO: Version 2 of loggerd will instead use direct writes to ini files to track activity across networks. 
+;; Should create a section for all classes of events involving each target, for example #channel.msg or #channel.join or even Melody.msg
+;; This will create a file that we can call back with /filter later.
+;; We will comment out the old code as we overhaul it and remove the old commented code when everything works as intended.
+
+#ldmaint on
+on ^*:start: { 
+  echo -a 4,6LOGGERd IS DISABLED, you will not be able to use /seen during this session
+  timer 1000 3600 /echo -s 4,6LOGGERd IS DISABLED, you will not be able to use /seen during this session
+}
+#ldmaint end
+
+#loggerdmain off
+alias initloggerd {
+  hmake $network
+  hload $network $network $+ .dat 
+}
+
+on ^*:connect: { 
+  initloggerd
+}
+
+on ^*:text:*:*: { 
+  var %inifile [ [ $network [ $+ .ini ] ] ]
+  writeini -n %inifile $+($target,msg) $1-
+  writeini -n %inifile $+($target,datetime) $adate $ctime
+  writeini -n %inifile $+($target,raw) $adate $ctime $target $1-
+  flushini %inifile
+  ;;hadd -m $network $+($target,.,$nick) $adate $ctime $target $1-
+  ;;hadd -m $network $+(address,.,$nick) $address($nick,2)
+}
+
+on ^*:join:#: {
+  hadd -m $network $+($target,.,$nick) $adate $ctime $target Joined
+  hadd -m $network $+(address,.,$nick) $address($nick,2)
+}
+
+on ^*:part:#: {
+  hadd -m $network $+($target,.,$nick) $adate $ctime $target Parted 
+  hadd -m $network $+(address,.,$nick) $address($nick,2)
+}
+
+on ^*:quit: {
+  hadd -m $network $+($target,.,$nick) $adate $ctime Quit Server $1-
+  hadd -m $network $+(address,.,$nick) $address($nick,2)
+}
+
+on ^*:nick: {
+  hadd -m $network $+($target,.,$nick) $adate $ctime Nick $newnick
+  hadd -m $network $+(address,.,$nenick) $address($newnick,2)
+
+}
+
+on ^*:exit: { 
+  flushini  [ [ $network [ $+ .ini ] ] ]
+  ;;scid -a /hsave $network $network $+ .dat
+}
+
+alias seen {
+  var %i $hfind($network,$+(*,$1),0,w)
+  while (%i > 0) {
+    /sw $1 $hget($network,$hfind($network,$+(*,$1),%i,w)) 
+    dec %i
+  }
+  /sw $1 $hget($network,$hfind($network,$+(address.,$1),1))
+}
+alias sw {
+  window -dDie2k0r @seen /seen
+  aline -p @seen $network > $1 $2 @ $asctime($3,hh:nn:sst) $+ : $4-
+  if ($active != @seen) {
+    /echo -a $network > $1 $2 @ $asctime($3,hh:nn:sst) $+ : $4-
+  }
+
+}
+
+#loggerdmain end
