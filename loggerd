@@ -1,18 +1,19 @@
-;; TODO: Version 2 of loggerd will instead use direct writes to ini files to track activity across networks. 
-;; Should create a section for all classes of events involving each target, for example #channel.msg or #channel.join or even Melody.msg
-;; This will create a file that we can call back with /filter later.
-;; We will comment out the old code as we overhaul it and remove the old commented code when everything works as intended.
+;; TODO: Version 1 of loggerd will instead use direct writes to ini files to track activity across networks. 
+;; This will create a file that we can call back with /filter later. 
+;; We threw out the old todo stuff, that was complicated. We can parse strings later when reading from the file
+;; Section Examples: Network.msg (holds last message seen), Network.act (holds last action seen), Network.addr (holds last address seen at)
 
-#ldmaint on
+;; Keeping this part, we want to make sure this broadcasts every so often. But since /seen isn't YET implemented...well yeah.
+#ldmaint off
 on ^*:start: { 
-  echo -a 4,6LOGGERd IS DISABLED, you will not be able to use /seen during this session
-  timer 1000 3600 /echo -s 4,6LOGGERd IS DISABLED, you will not be able to use /seen during this session
+  ;echo -a 4,6LOGGERd IS DISABLED, you will not be able to use /seen during this session
+  ;timer 1000 3600 /echo -s 4,6LOGGERd IS DISABLED, you will not be able to use /seen during this session
 }
 #ldmaint end
 
-#loggerdmain off
+#loggerdmain on
 alias initloggerd {
-  hmake $network
+  ;hmake $network
   hload $network $network $+ .dat 
 }
 
@@ -21,33 +22,47 @@ on ^*:connect: {
 }
 
 on ^*:text:*:*: { 
-  var %inifile [ [ $network [ $+ .ini ] ] ]
-  writeini -n %inifile $+($target,msg) $1-
-  writeini -n %inifile $+($target,datetime) $adate $ctime
-  writeini -n %inifile $+($target,raw) $adate $ctime $target $1-
+  var %inifile [ $network $+ .ini ]
+  writeini -n [ %inifile [ $+($network,.,act) ] $+(LASTACT,:,$nick) Messaged $target at $adate $ctime ]
+  writeini -n [ %inifile [ $+($network,.,msg) ] $+(MSG,_,$nick) $1- ]
+  writeini -n [ %inifile [ $+($network,.,msg) ] $+($target,_,datetime) $nick $adate $ctime ]
+  writeini -n [ %inifile [ $+($network,.,msg) ] $+($target,_,raw) $nick $adate $ctime $target $1- ]
+  writeini -n [ %inifile [ $+($network,.,addr) ] $nick $address($nick,0) $address($nick,2) $address($nick,5) ]
   flushini %inifile
-  ;;hadd -m $network $+($target,.,$nick) $adate $ctime $target $1-
-  ;;hadd -m $network $+(address,.,$nick) $address($nick,2)
+  ;;;hadd -m $network $+($target,.,$nick) $adate $ctime $target $1-
+  ;;;hadd -m $network $+(address,.,$nick) $address($nick,2)
 }
 
 on ^*:join:#: {
-  hadd -m $network $+($target,.,$nick) $adate $ctime $target Joined
-  hadd -m $network $+(address,.,$nick) $address($nick,2)
+  var %inifile [ $network $+ .ini ]
+  writeini -n %inifile [ $+($network,.,addr) ] [ $nick $address($nick,0) $address($nick,2) $address($nick,5) ]
+  writeini -n %inifile [ $+($network,.,act) ] [ $+(LASTACT,:,$nick) Joined $target at $adate $ctime ]
+  ;hadd -m $network $+($target,.,$nick) $adate $ctime $target Joined
+  ;hadd -m $network $+(address,.,$nick) $address($nick,2)
 }
 
 on ^*:part:#: {
-  hadd -m $network $+($target,.,$nick) $adate $ctime $target Parted 
-  hadd -m $network $+(address,.,$nick) $address($nick,2)
+  var %inifile [ $network $+ .ini ]
+  writeini -n %inifile [ $+($network,.,addr) ] [ $nick $address($nick,0) $address($nick,2) $address($nick,5) ]
+  writeini -n %inifile [ $+($network,.,act) ] [ $+(LASTACT,:,$nick) Parted $target at $adate $ctime with message $1- ]
+  ;hadd -m $network $+($target,.,$nick) $adate $ctime $target Parted 
+  ;hadd -m $network $+(address,.,$nick) $address($nick,2)
 }
 
 on ^*:quit: {
-  hadd -m $network $+($target,.,$nick) $adate $ctime Quit Server $1-
-  hadd -m $network $+(address,.,$nick) $address($nick,2)
+  var %inifile [ $network $+ .ini ]
+  writeini -n %inifile [ $+($network,.,addr) ] [ $nick $address($nick,0) $address($nick,2) $address($nick,5) ]
+  writeini -n %inifile [ $+($network,.,act) ] [ $+(LASTACT,:,$nick) Quit at $adate $ctime with message $1- ]
+  ;hadd -m $network $+($target,.,$nick) $adate $ctime Quit Server $1-
+  ;hadd -m $network $+(address,.,$nick) $address($nick,2)
 }
 
 on ^*:nick: {
-  hadd -m $network $+($target,.,$nick) $adate $ctime Nick $newnick
-  hadd -m $network $+(address,.,$nenick) $address($newnick,2)
+  var %inifile [ $network $+ .ini ]
+  writeini -n %inifile [ $+($network,.,addr) ] [ $nick $address($nick,0) $address($nick,2) $address($nick,5) ]
+  writeini -n %inifile [ $+($network,.,act) ] [ $+(LASTACT,:,$nick) Changed nick to $newnick $adate $ctime ]
+  ;hadd -m $network $+($target,.,$nick) $adate $ctime Nick $newnick
+  ;hadd -m $network $+(address,.,$nenick) $address($newnick,2)
 
 }
 
@@ -56,6 +71,7 @@ on ^*:exit: {
   ;;scid -a /hsave $network $network $+ .dat
 }
 
+/* We've commented out this section of the script pending rewrite for INI storage.
 alias seen {
   var %i $hfind($network,$+(*,$1),0,w)
   while (%i > 0) {
@@ -70,7 +86,7 @@ alias sw {
   if ($active != @seen) {
     /echo -a $network > $1 $2 @ $asctime($3,hh:nn:sst) $+ : $4-
   }
-
 }
+*/
 
 #loggerdmain end
