@@ -12,13 +12,19 @@ on ^*:start: {
 #ldmaint end
 
 #loggerdmain on
+
+;As a performance booster we've removed the flushini from the ontext event. This should keep mIRC from locking up
+;To ensure new text events get parsed, we're also running a timer so that the inis get flushed every 15s
+;This should decrease the disk I/O load of the script significantly, and we can lower the time for more up to date logging
 alias initloggerd {
-  ;hmake $network
-  ;hload $network $network $+ .dat 
   window -dDe2k0 @Seen 
+  var %inifile [ $network $+ .ini ]
+  flushini %inifile
+  timer 0 15 /flushini %inifile
 }
 
 on ^*:connect: { 
+  var %inifile [ $network $+ .ini ]
   initloggerd
 }
 
@@ -29,10 +35,11 @@ on ^*:text:*:*: {
   writeini -n [ %inifile [ $+($network,.,msg) ] $+($target,_,datetime) $nick $adate $asctime($ctime,hh:nn:ss) ]
   writeini -n [ %inifile [ $+($network,.,msg) ] $+($target,_,raw) $nick $adate $asctime($ctime,hh:nn:ss) $target $1- ]
   writeini -n [ %inifile [ $+($network,.,addr) ] $nick $address($nick,0) $address($nick,2) $address($nick,5) *!*@* ]
-  flushini %inifile
   ;;;hadd -m $network $+($target,.,$nick) $adate $asctime($ctime,hh:nn:ss) $target $1-
   ;;;hadd -m $network $+(address,.,$nick) $address($nick,2)
 }
+
+;WE STILL FLUSH THE INIS ON LESS COMMON EVENTS! This is to make sure that things stay up to date as we're seeing things happen
 
 on ^*:join:#: {
   var %inifile [ $network $+ .ini ]
@@ -54,7 +61,7 @@ on ^*:part:#: {
 
 on ^*:quit: {
   var %inifile [ $network $+ .ini ]
-  writeini -n %inifile [ $+($network,.,addr) ] [ $nick $address($nick,0) $address($nick,2) $address($nick,5) ]
+  writeini -n %inifile [ $+($network,.,addr) ] [ $nick $address($nick,0) $address($nick,2) $address($nick,5) ] 
   writeini -n %inifile [ $+($network,.,act) ] [ $+(LASTACT,:,$nick) Quit at $adate $asctime($ctime,hh:nn:ss) with message $1- ]
   flushini %inifile
   ;hadd -m $network $+($target,.,$nick) $adate $asctime($ctime,hh:nn:ss) Quit Server $1-
@@ -63,7 +70,7 @@ on ^*:quit: {
 
 on ^*:nick: {
   var %inifile [ $network $+ .ini ]
-  writeini -n %inifile [ $+($network,.,addr) ] [ $nick $address($newnick,0) $address($newnick,2) $address($newnick,5) ]
+  writeini -n %inifile [ $+($network,.,addr) ] [ $nick $address($newnick,0) $address($newnick,2) $address($newnick,5) ] 
   writeini -n %inifile [ $+($network,.,act) ] [ $+(LASTACT,:,$nick) Changed nick to $newnick $adate $asctime($ctime,hh:nn:ss) ]
   flushini %inifile
   ;hadd -m $network $+($target,.,$nick) $adate $asctime($ctime,hh:nn:ss) Nick $newnick
@@ -83,21 +90,20 @@ on ^*:kick:#: {
   flushini %inifile
 }
 
+;Flushing on Exit is required. 
 on ^*:exit: { 
   var %inifile [ $network $+ .ini ]
   flushini %inifile
-  ;;scid -a /hsave $network $network $+ .dat
 }
 
 alias seen {
   var %inifile [ $network $+ .ini ]
   flushini %inifile
+  sw
   /filter -cfnwp %inifile @Seen $+(*,$1-,*)
+  /titlebar @Seen [ $network [ $+(Query:,*,$1-,*) Found: $filtered matches ] ]
 }
 alias sw {
-  window -dDie2k0r @Seen /seen
+  window -adDe2ik0rz @Seen /seen 
 }
-/* We've commented out this section of the script pending rewrite for INI storage.
-*/
-
 #loggerdmain end
